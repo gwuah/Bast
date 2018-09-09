@@ -15,29 +15,40 @@ from tornado.util import unicode_type
 from .exception import BastException
 from .json_ import Json as json_
 from .view import TemplateRendering
+import os
+from tornado.gen import coroutine
+from bast import Bast
 
 
 class Controller(RequestHandler, TemplateRendering):
-    method = None
-    middleware = None
+    method          = None
+    middleware      = None
+    providers       = {}
+    request_type    = None
 
     def __init__(self, application, request, **kwargs):
-        super().__init__(application, request, **kwargs)
+        super(Controller, self).__init__(application, request, **kwargs)
         self.request        = request
         self.application    = application
+        self.session_driver = os.getenv("SESSION")
+
+        self.session = Bast.session['session']
 
     def write_error(self, status_code, **kwargs):
         """
         Handle Exceptions from the server. Formats the HTML into readable form
         """
         reason = self._reason
+
         if self.settings.get("serve_traceback") and "exc_info" in kwargs:
             error = []
             for line in traceback.format_exception(*kwargs["exc_info"]):
                 error.append(line)
         else:
             error = None
-        self.write(html_error(status_code, reason, error))
+        data = {'_traceback': error, 'message': reason, 'code': status_code}
+        content = self.render_exception(**data)
+        self.write(content)
 
     def view(self, template_name, kwargs=None):
         """
@@ -56,13 +67,7 @@ class Controller(RequestHandler, TemplateRendering):
         if kwargs is None:
             kwargs = dict()
 
-        kwargs.update({
-            'settings': self.settings,
-            'STATIC_URL': self.settings.get('static_url_prefix', 'public/static/'),
-            'request': self.request,
-            'xsrf_token': self.xsrf_token,
-            'xsrf_form_html': self.xsrf_form_html,
-        })
+        self.add_('session', self.session)
 
         content = self.render_template(template_name, **kwargs)
         self.write(content)
@@ -90,13 +95,14 @@ class Controller(RequestHandler, TemplateRendering):
 
         return return_value
 
-    def initialize(self, method, middleware):
+    def initialize(self, method, middleware, request_type):
         """
-        Overriden initialize method from Tornado. Assigns the controller method and middleware attached to the route being executed
+        Overridden initialize method from Tornado. Assigns the controller method and middleware attached to the route being executed
         to global variables to be used
         """
         self.method = method
         self.middleware = middleware
+        self.request_type = request_type
 
     def only(self, arguments):
         """
@@ -120,6 +126,30 @@ class Controller(RequestHandler, TemplateRendering):
 
         for i in arguments:
             data[i] = self.get_argument(i)
+        return data
+
+    def all(self):
+        """
+        Returns all the arguments passed with the request
+
+        Sample Usage
+        ++++++++++++
+        .. code:: python
+
+            from bast import Controller
+
+            class MyController(Controller):
+                def index(self):
+                    data = self.all()
+
+        Returns a dictionary of all the request arguments
+
+        """
+        data = {}
+        args = self.request.arguments
+        for key, value in args.items():
+            data[key] = self.get_argument(key)
+
         return data
 
     def except_(self, arguments):
@@ -156,53 +186,61 @@ class Controller(RequestHandler, TemplateRendering):
         self.write(json_.encode(data))
         self.set_header('Content-type', 'application/json')
 
+    @coroutine
     def get(self, *args, **kwargs):
-        try:
-            if self.middleware is not None and len(self.middleware) > 0:
-                value = self.__run_middleware__(self.middleware)
-                if not value:
-                    return
-            func = getattr(self, self.method)
-            if func:
-                func()
-            else:
-                raise BastException(404, "Not Found")
-        except AttributeError as e:
-            logging.error(str(e))
-            raise BastException(500, "Controller Function not found")
+        if self.request_type is not 'GET':
+            raise BastException(405, "Wrong Method. Expected Request Method:  %s" % self.request_type)
+        if self.middleware is not None and len(self.middleware) > 0:
+            value = self.__run_middleware__(self.middleware)
+            if not value:
+                return
+        func = getattr(self, self.method)
+        if func:
+            func()
+        else:
+            raise BastException(404, "Controller Function Not Found")
 
+    @coroutine
     def post(self, *args, **kwargs):
-        try:
-            func = getattr(self, self.method)
-            if func:
-                func()
-            else:
-                raise BastException(404, "Not Found")
-        except AttributeError as e:
-            logging.error(str(e))
-            raise BastException(500, "Controller Function not found")
+        if self.request_type is not 'POST':
+            raise BastException(405, "Wrong Method. Expected Request Method:  %s" % self.request_type)
+        if self.middleware is not None and len(self.middleware) > 0:
+            value = self.__run_middleware__(self.middleware)
+            if not value:
+                return
+        func = getattr(self, self.method)
+        if func:
+            func()
+        else:
+            raise BastException(404, "Controller Function Not Found")
 
+    @coroutine
     def put(self, *args, **kwargs):
-        try:
-            func = getattr(self, self.method)
-            if func:
-                func()
-            else:
-                raise BastException(404, "Not Found")
-        except AttributeError as e:
-            logging.error(str(e))
-            raise BastException(500, "Controller Function not found")
+        if self.request_type is not 'PUT':
+            raise BastException(405, "Wrong Method. Expected Request Method:  %s" % self.request_type)
+        if self.middleware is not None and len(self.middleware) > 0:
+            value = self.__run_middleware__(self.middleware)
+            if not value:
+                return
+        func = getattr(self, self.method)
+        if func:
+            func()
+        else:
+            raise BastException(404, "Controller Function Not Found")
 
+    @coroutine
     def delete(self, *args, **kwargs):
-        try:
-            func = getattr(self, self.method)
-            if func:
-                func()
-            else:
-                raise BastException(404, "Not Found")
-        except AttributeError as e:
-            logging.error(str(e))
-            raise BastException(500, "Controller Function not found")
+        if self.request_type is not 'DELETE':
+            raise BastException(405, "Wrong Method. Expected Request Method:  %s" % self.request_type)
+        if self.middleware is not None and len(self.middleware) > 0:
+            value = self.__run_middleware__(self.middleware)
+            if not value:
+                return
+        func = getattr(self, self.method)
+        if func:
+            func()
+        else:
+            raise BastException(404, "Controller Function Not Found")
 
     def get_argument(self, name, default=None, strip=True):
         """
@@ -214,7 +252,7 @@ class Controller(RequestHandler, TemplateRendering):
 
         The returned value is always unicode
         """
-        return self._get_argument(name, default, self.request.arguments, strip)
+        return self._get_argument(name, default, self.request.arguments, strip)[name]
 
     def headers(self):
         """
@@ -232,7 +270,7 @@ class Controller(RequestHandler, TemplateRendering):
         args = self._get_arguments(name, source, strip=strip)
         if not args:
             if default is None:
-                return default
+                return None
         return args[-1]
 
     def _get_arguments(self, name, source, strip=True):
@@ -243,131 +281,7 @@ class Controller(RequestHandler, TemplateRendering):
                 v = self._remove_control_chars_regex.sub(" ", v)
             if strip:
                 v = v.strip()
+
+            v = {name: v}
             values.append(v)
         return values
-
-
-def html_error(code, message, _traceback=None):
-    """
-    Render Error code as HTML for better viewing
-    :param code:
-    :param message:
-    :param _traceback:
-    :return:
-    """
-    message_ = """
-            <!DOCTYPE html>
-                <html lang="en">
-                <head>
-                    <meta charset="UTF-8">
-                    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-                    <meta http-equiv="X-UA-Compatible" content="ie=edge">
-                    <title>Arrrgghh!! Exception </title>
-                    <link rel="stylesheet" href="style.css">
-                    <style>
-                        body {
-                            margin: 0px auto;
-                            padding: 0px;
-                            font-family: 'Trebuchet MS', 'Lucida Sans Unicode', 'Lucida Grande', 'Lucida Sans', Arial, sans-serif;
-                        }
-                        
-                        .h-text {
-                            color: #993300;
-                        }
-                        
-                        .container {
-                            width: 70%;
-                            margin: 40px auto;
-                            padding: 20px;
-                            box-shadow: 1px 1px 1px 1px #ccc;
-                            background: #F8F6F8;
-                        }
-                        
-                        .image {
-                            width: 100px;
-                            max-width: 100%;
-                            opacity: 0.6;
-                        }
-                        
-                        hr {
-                            border-width: 1px;
-                            border-color: #991100;
-                        }
-                        
-                        .show-more{
-                            padding-top: 10px;
-                            padding-bottom: 10px;
-                        }
-                        .show-more a {
-                            color: #993300;
-                        }
-                        
-                        .panel-error {
-                            background: #DDD;
-                            padding: 10px;
-                            color: #666;
-                        }
-                        
-                        .panel-error-editor {
-                            background: #DDD;
-                            padding: 10px;
-                            color: #666;
-                        }
-                        
-                        .error-show {
-                            color: #666;
-                        }
-                        
-                        .class {
-                            color: blue;
-                            font-weight: bold;
-                        }
-                        
-                        .method {
-                            color: #666;
-                        }
-                        
-                        .variable {
-                            color: #111;
-                        }
-
-                    </style>
-                    <script>
-                        function show_more(e) {
-                            e.preventDefault()
-                            const el = document.querySelector('.panel-error-editor')
-                            if( el.style.display == 'none') {
-                                el.style.display = 'block'
-                            } else {
-                                el.style.display = 'none'
-                            }
-                        }
-                    </script>
-                </head>
-                <body>
-                    <div class="container">
-                        <h1 class="h-text">""" + str(code) + " " + message + """
-                             </h1>
-                        <hr>
-                        <p class="error-show"> An Error Occurred during Execution </p> """
-
-    if _traceback is None:
-        message_ += "</div></body>"
-        return message_
-
-    for i in range(0, len(_traceback)):
-        if i is 0:
-            message_ += "<div class='panel-error'> <h1 class='h-text'> %s </h1> " % (_traceback[0])
-            continue
-        message_ += "<p>%s</p>" % (_traceback[i])
-
-    message_ += """
-                        </div>
-                        <div class="show-more">
-                        </div>
-                    </div>
-                </body>
-                </html>
-    """
-
-    return message_

@@ -7,7 +7,7 @@ BAST Framework
 
 
 
-|travis| |circleci| |python| |license| |coverall| |status| |issues| |contributors| |downloads|
+|travis| |circleci| |pversion| |license| |coverall| |status| |issues| |contributors| |downloads|
 
  
 About Bast
@@ -54,7 +54,7 @@ You do not need to import your controller again
     from bast import Route
 
     route = Route()
-    route.get(url='/', controller='ExampleController.index')
+    route.get('/', 'ExampleController.index')
     
 Bast Controllers are Python Classes which inherit from the Bast Controller Class. Using ``panther create:controller ControllerName`` creates a controller file in the controller package. To render template in controller, use ``self.view('template.html', args=None)`` where the args is a Dictionary object and optional
 
@@ -108,7 +108,6 @@ Eloquent Object Relation Mapping is achieved using `Orator ORM`_
 .. _Orator ORM: https://orator-orm.com
 .. |travis| image:: https://travis-ci.org/moluwole/Bast.svg?branch=master
 .. |circleci| image:: https://circleci.com/gh/moluwole/Bast.svg?style=svg
-.. |python| image:: https://img.shields.io/badge/python-3.0+-blue.svg
 .. |license| image:: https://img.shields.io/github/license/moluwole/bast.svg
 .. |pversion| image:: https://img.shields.io/pypi/pyversions/Bast.svg
 .. |status| image:: https://img.shields.io/pypi/status/Bast.svg
